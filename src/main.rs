@@ -45,39 +45,43 @@ fn main() {
                     match frame.frame_type {
                         ARP => {
                             println!("{}", ARPPacket::from(frame.get_content()));
-                        },
+                        }
                         IPV4 => {
                             let packet = Ipv4Packet::from(frame.get_content());
                             println!("{}", packet);
                             println!("LAYER 4: SESSION - SEGMENT");
                             match packet.protocol {
-                                TCP => {
-                                    let segment = TcpSegment::from(packet.get_content());
-                                    println!("{}", segment);
-                                    if (segment.source_port == 80) | (segment.destination_port == 80) {
-                                        println!("LAYER 5,6,7 - APPLICATION - DATA");
-                                        stdout().write_all(&data[(14 + packet.ihl * 4 + segment.data_offset * 4) as usize..]).unwrap();
-                                    }
-                                },
+                                // TCP => {
+                                //     let segment = TcpSegment::from(packet.get_content());
+                                //     println!("{}", segment);
+                                //     println!("LAYER 5,6,7 - APPLICATION - DATA");
+                                //     if (segment.source_port == 80) | (segment.destination_port == 80) {
+                                //         stdout().write_all(&data[(14 + packet.ihl * 4 + segment.data_offset * 4) as usize..]).unwrap();
+                                //     } else if segment.destination_port == 53 {
+                                //         stdout().write_all(&data[(14 + packet.ihl * 4 + segment.data_offset * 4 + 16) as usize..]).unwrap();
+                                //     }
+                                // }
                                 UDP => {
                                     let segment = UDPSegment::from(&data[(14 + packet.ihl * 4) as usize..]);
                                     println!("{}", segment);
                                     println!("LAYER 5,6,7 - APPLICATION - DATA");
-                                    stdout().write_all(&data[(14 + packet.ihl * 4 + 8) as usize..]).unwrap();
-                                },
-                                ICMP => {
-                                    let segment = ICMPSegment::from(packet.get_content());
-                                    println!("{}", segment);
-                                    println!("LAYER 5,6,7 - APPLICATION - DATA");
-                                    stdout().write_all(&packet.get_content()[40..]).unwrap();
-                                    println!();
+                                    if segment.source_port == 53 {
+                                        println!("{}", DNSQuery::from(&data[(14 + packet.ihl * 4 + 8) as usize..]));
+                                    }
                                 }
-                                _ => println!("unidentified"),
+                                // ICMP => {
+                                //     let segment = ICMPSegment::from(packet.get_content());
+                                //     println!("{}", segment);
+                                //     println!("LAYER 5,6,7 - APPLICATION - DATA");
+                                //     stdout().write_all(&packet.get_content()[40..]).unwrap();
+                                //     println!();
+                                // }
+                                _ => println!("unidentified")
                             }
-                        },
+                        }
                         IPV6 => {
                             println!("{}", Ipv6Packet::from(frame.get_content()));
-                        },
+                        }
                         _ => println!("unidentified")
                     };
                 }
@@ -435,6 +439,40 @@ impl Display for ICMPSegment {
             ["code", self.code],
             ["checksum", format!("{:X}", self.checksum)],
             ["rest", self.rest]
+        );
+        table.set_format(*format::consts::FORMAT_CLEAN);
+        table.get_format().padding(5, 5);
+        writeln!(f, "{}", table).unwrap();
+        Ok(())
+    }
+}
+
+struct DNSQuery {
+    id: u16,
+    flags: u16,
+    questions: u16,
+    answers: u16
+}
+
+impl DNSQuery {
+    fn from(data: &[u8]) -> Self {
+        Self {
+            id: tou16(&data[0..2]),
+            flags: tou16(&data[2..4]),
+            questions: tou16(&data[4..6]),
+            answers: tou16(&data[6..8])
+        }
+    }
+}
+
+impl Display for DNSQuery {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+
+        let mut table = table!(
+            ["id", format!("{:X}", self.id)],
+            ["flags", format!("{:b}", self.flags)],
+            ["questions", self.questions],
+            ["answers", self.answers]
         );
         table.set_format(*format::consts::FORMAT_CLEAN);
         table.get_format().padding(5, 5);
